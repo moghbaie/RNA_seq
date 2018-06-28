@@ -204,15 +204,27 @@ barplot(counts(dds.norm, normalized=T)[rownames( res.DESeq2)[3],], names.arg=pas
 barplot(counts(dds.norm, normalized=T)[rownames( res.DESeq2)[4],], names.arg=paste0(sampleTable[1:4,"Sex"]$Sex,"_",sampleTable[1:4,"AS"]$AS),
         col=col.pal[as.vector(sampleTable$AS[1:4])], main=entrezID2symbol(res.DESeq2[4,]), las=2, cex.names=0.7)
 
+# 10. Pheatmap Differential expression analysis based on the Negative Binomial
+# apply a variance stabilizing transformation
+dds0_esq <- DESeq(dds0)
+assay(dds0_esq)
+vsd0 <- vst(dds0_esq)
+res0 <- results(dds0_esq)
+summary(res0)
+mat0 <- assay(vsd0)[ head(order(res0$padj),60),]
+mat0 <- mat0 - rowMeans(mat0)
+rownames(mat0) <- entrezID2symbol(mat0)
+df <- as.data.frame(colData(vsd0)[,c("Sex","HBV","AS")])
 
-##10. Draw a MA plot.
+pheatmap(mat0, annotation_col=df)
+##11. Draw a MA plot.
 ## Genes with adjusted p-values below 1% are shown
 par(mfrow=c(1,1))
 plotMA(res.DESeq2, colNonSig = "blue")
 abline(h=c(-1:1), col="red")
 
 
-#11. Performing Functional enrichment
+#12. Performing Functional enrichment
 
 library(gProfileR)
 
@@ -261,14 +273,14 @@ plotDensity(log2(counts(dds1.norm, normalized=TRUE)+epsilon), col=col.pal[as.vec
             xlab="log2(normalized counts)", cex.lab=0.7, panel.first=grid()) 
 
 ## Computing mean and variance
-norm.counts <- counts(dds.norm, normalized=TRUE)
-mean.counts <- rowMeans(norm.counts)
-variance.counts <- apply(norm.counts, 1, var)
+norm1.counts <- counts(dds1.norm, normalized=TRUE)
+mean1.counts <- rowMeans(norm1.counts)
+variance1.counts <- apply(norm1.counts, 1, var)
 ## Mean and variance relationship
-mean.var.col <- densCols(x=log2(mean.counts), y=log2(variance.counts))
+mean1.var.col <- densCols(x=log2(mean1.counts), y=log2(variance1.counts))
 ## 04. Plotting mean to variance relationship
 par(mfrow=c(1,1))
-plot(x=log2(mean.counts), y=log2(variance.counts), pch=16, cex=0.5, 
+plot(x=log2(mean1.counts), y=log2(variance1.counts), pch=16, cex=0.5, 
      col=mean.var.col, main="Mean-variance relationship",
      xlab="Mean log2(normalized counts) per gene",
      ylab="Variance of log2(normalized counts)",
@@ -277,29 +289,29 @@ abline(a=0, b=1, col="brown")
 
 
 ## 05. estimation of dispersion parameter and plotting it
-dds.disp <- estimateDispersions(dds.norm)
+dds1.disp <- estimateDispersions(dds1.norm)
 
 ## A diagnostic plot which
 ## shows the mean of normalized counts (x axis)
 ## and dispersion estimate for each genes
-plotDispEsts(dds.disp)
+plotDispEsts(dds1.disp)
 ## 06. Performing differential expression call using wald test
 alpha <- 0.0001
-wald.test <- nbinomWaldTest(dds.disp)
-res.DESeq2 <- results(wald.test, alpha=alpha, pAdjustMethod="none")
-res.DESeq2 <- res.DESeq2[!is.na(res.DESeq2$pvalue),]
+wald.test1 <- nbinomWaldTest(dds1.disp)
+res.DESeq3 <- results(wald.test1, alpha=alpha, pAdjustMethod="none")
+res.DESeq3 <- res.DESeq3[!is.na(res.DESeq3$pvalue),]
 ## What is the object returned by nbinomTest()
-dim(res.DESeq2)
-head(res.DESeq2)
-res.DESeq2 <- res.DESeq2[order(res.DESeq2$padj),]
-head(res.DESeq2)
+dim(res.DESeq3)
+head(res.DESeq3)
+res.DESeq3 <- res.DESeq3[order(res.DESeq3$padj),]
+head(res.DESeq3)
 ##07. Draw an histogram of the p-values
-hist(res.DESeq2$padj, breaks=20, col="grey", main="DESeq2 p-value distribution", xlab="DESeq2 P-value", ylab="Number of genes")
+hist(res.DESeq3$padj, breaks=20, col="grey", main="DESeq3 p-value distribution", xlab="DESeq2 P-value", ylab="Number of genes")
 
 ##08. Volcano plot
 alpha <- 0.01 # Threshold on the adjusted p-value
-cols <- densCols(res.DESeq2$log2FoldChange, -log10(res.DESeq2$padj))
-plot(res.DESeq2$log2FoldChange, -log10(res.DESeq2$padj), col=cols, panel.first=grid(),
+cols <- densCols(res.DESeq3$log2FoldChange, -log10(res.DESeq3$padj))
+plot(res.DESeq3$log2FoldChange, -log10(res.DESeq3$padj), col=cols, panel.first=grid(),
      main="Volcano plot", xlab="Effect size: log2(fold-change)", ylab="-log10( Adjusted p-value)",
      pch=20, cex=0.6)
 abline(v=0)
@@ -307,36 +319,61 @@ abline(v=c(-1,1), col="brown")
 abline(h=-log10(alpha), col="brown")
 
 
-gn.selected <- abs(res.DESeq2$log2FoldChange) > 1.5 & res.DESeq2$padj < alpha 
-text(res.DESeq2$log2FoldChange[gn.selected],
-     -log10(res.DESeq2$padj)[gn.selected],
-     lab=entrezID2symbol(res.DESeq2[gn.selected ,]), cex=0.7)
+gn.selected <- abs(res.DESeq3$log2FoldChange) > 1.5 & res.DESeq3$padj < alpha 
+text(res.DESeq3$log2FoldChange[gn.selected],
+     -log10(res.DESeq3$padj)[gn.selected],
+     lab=entrezID2symbol(res.DESeq3[gn.selected ,]), cex=0.7)
 
 ##09. Plotting expression levels of the most differentially expressed gene
-par(mfrow=c(2,2), mar=c(4,4,4,4))
+par(mfrow=c(3,3), mar=c(4,4,4,4))
 
-barplot(counts(dds.norm, normalized=T)[rownames( res.DESeq2)[1],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
-        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol( res.DESeq2[1,]), las=2, cex.names=0.7)
-barplot(counts(dds.norm, normalized=T)[rownames( res.DESeq2)[2],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
-        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol( res.DESeq2[2,]), las=2, cex.names=0.7)
-barplot(counts(dds.norm, normalized=T)[rownames( res.DESeq2)[3],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
-        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol(res.DESeq2[3,]), las=2, cex.names=0.7)
-barplot(counts(dds.norm, normalized=T)[rownames( res.DESeq2)[4],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
-        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol(res.DESeq2[4,]), las=2, cex.names=0.7)
+barplot(counts(dds1.norm, normalized=T)[rownames( res.DESeq3)[1],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
+        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol( res.DESeq3[1,]), las=2, cex.names=0.7)
+barplot(counts(dds1.norm, normalized=T)[rownames( res.DESeq3)[2],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
+        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol( res.DESeq3[2,]), las=2, cex.names=0.7)
+barplot(counts(dds1.norm, normalized=T)[rownames( res.DESeq3)[3],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
+        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol(res.DESeq3[3,]), las=2, cex.names=0.7)
+barplot(counts(dds1.norm, normalized=T)[rownames( res.DESeq3)[4],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
+        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol(res.DESeq3[4,]), las=2, cex.names=0.7)
+barplot(counts(dds1.norm, normalized=T)[rownames( res.DESeq3)[5],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
+        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol( res.DESeq3[5,]), las=2, cex.names=0.7)
+barplot(counts(dds1.norm, normalized=T)[rownames( res.DESeq3)[6],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
+        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol( res.DESeq3[6,]), las=2, cex.names=0.7)
+barplot(counts(dds1.norm, normalized=T)[rownames( res.DESeq3)[7],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
+        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol(res.DESeq3[7,]), las=2, cex.names=0.7)
+barplot(counts(dds1.norm, normalized=T)[rownames( res.DESeq3)[8],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
+        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol(res.DESeq3[8,]), las=2, cex.names=0.7)
+barplot(counts(dds1.norm, normalized=T)[rownames( res.DESeq3)[9],], names.arg=paste0(sampleTable[5:10,"Sex"]$Sex,"_",sampleTable[5:10,"AS"]$AS),
+        col=col.pal[as.vector(sampleTable$AS[5:10])], main=entrezID2symbol(res.DESeq3[9,]), las=2, cex.names=0.7)
 
-##10. Draw a MA plot.
+
+
+# 10. Pheatmap Differential expression analysis based on the Negative Binomial
+# apply a variance stabilizing transformation
+dds1_esq <- DESeq(dds1)
+assay(dds1_esq)
+vsd <- vst(dds1_esq)
+res1 <- results(dds1_esq)
+summary(res1)
+mat <- assay(vsd)[ head(order(res1$padj),60),]
+mat <- mat - rowMeans(mat)
+rownames(mat) <- entrezID2symbol(mat)
+df <- as.data.frame(colData(vsd)[,c("Sex","HBV","AS")])
+
+pheatmap(mat, annotation_col=df)
+##11. Draw a MA plot.
 ## Genes with adjusted p-values below 1% are shown
 par(mfrow=c(1,1))
-plotMA(res.DESeq2, colNonSig = "blue")
+plotMA(res.DESeq3, colNonSig = "blue")
 abline(h=c(-1:1), col="red")
 
 
-#11. Performing Functional enrichment
+#12. Performing Functional enrichment
 
 library(gProfileR)
 
-res.DESeq2.df <- na.omit(data.frame(res.DESeq2))
-induced.sign <- res.DESeq2[abs(res.DESeq2$log2FoldChange) > 1.5 &  res.DESeq2$padj < alpha,]
+res.DESeq3.df <- na.omit(data.frame(res.DESeq3))
+induced.sign <- res.DESeq3[abs(res.DESeq3$log2FoldChange) > 1.5 &  res.DESeq3$padj < alpha,]
 # head(induced.sign)
 # names(term.induced)
 
